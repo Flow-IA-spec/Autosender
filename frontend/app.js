@@ -2,20 +2,77 @@ let currentToken = '';
 let pollInterval = null;
 const API = window.location.origin + '/api';
 
-// ===== TOASTS =====
-function toast(msg, type = 'info') {
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
-  document.getElementById('toastContainer').appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
+// ===== ACCOUNT MANAGER =====
+const STORAGE_KEY = 'autosender_accounts';
+const ACTIVE_KEY = 'autosender_active_account';
+
+function getAccounts() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+}
+function saveAccounts(accounts) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+}
+function getActiveAccountId() { return localStorage.getItem(ACTIVE_KEY); }
+function setActiveAccountId(id) { localStorage.setItem(ACTIVE_KEY, id); }
+
+function renderAccountSelect() {
+  const accounts = getAccounts();
+  const select = document.getElementById('accountSelect');
+  select.innerHTML = '';
+  const activeId = getActiveAccountId();
+  for (const [id, acc] of Object.entries(accounts)) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = `@${acc.username} (#${id.slice(0, 6)})`;
+    if (id === activeId) opt.selected = true;
+    select.appendChild(opt);
+  }
+  if (!Object.keys(accounts).length) {
+    select.innerHTML = '<option disabled>Nenhuma conta</option>';
+  }
+}
+
+async function switchAccount() {
+  const id = document.getElementById('accountSelect').value;
+  const accounts = getAccounts();
+  if (!accounts[id]) return;
+  setActiveAccountId(id);
+  await loginWithToken(accounts[id].token, accounts[id]);
+}
+
+function addAccount() {
+  const token = prompt('Cole o token da nova conta:');
+  if (!token || !token.trim()) return;
+  validateTokenAndStore(token.trim());
+}
+
+async function removeAccount() {
+  const id = getActiveAccountId();
+  if (!id) return;
+  if (!confirm('Remover esta conta?')) return;
+  const accounts = getAccounts();
+  delete accounts[id];
+  saveAccounts(accounts);
+  const remaining = Object.keys(accounts);
+  if (remaining.length) {
+    setActiveAccountId(remaining[0]);
+    const acc = accounts[remaining[0]];
+    await loginWithToken(acc.token, acc);
+  } else {
+    localStorage.removeItem(ACTIVE_KEY);
+    location.reload();
+  }
 }
 
 // ===== LOGIN =====
 async function validateToken() {
   const token = document.getElementById('tokenInput').value.trim();
+  if (!token) { document.getElementById('loginError').textContent = 'Cole um token'; return; }
+  await validateTokenAndStore(token);
+}
+
+async function validateTokenAndStore(token) {
   const errEl = document.getElementById('loginError');
-  if (!token) { errEl.textContent = 'Cole um token'; return; }
   errEl.textContent = '';
   try {
     const res = await fetch(API + '/validate-token', {
@@ -24,33 +81,44 @@ async function validateToken() {
     });
     const data = await res.json();
     if (!data.success) { errEl.textContent = 'Token inválido'; return; }
-    currentToken = token;
     const u = data.user;
-    document.getElementById('userName').textContent = u.global_name;
-    document.getElementById('userId').textContent = '#' + u.id;
-    // Avatar com fallback
-    let avatarUrl;
-    if (u.avatar) {
-      avatarUrl = `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128`;
-    } else {
-      const idx = u.discriminator && u.discriminator !== '0'
-        ? parseInt(u.discriminator) % 5
-        : Number(BigInt(u.id) >> 22n) % 6;
-      avatarUrl = `https://cdn.discordapp.com/embed/avatars/${idx}.png`;
-    }
-    document.getElementById('userAvatar').src = avatarUrl;
-    document.getElementById('userAvatar').onerror = () => {
-      document.getElementById('userAvatar').src = 'https://cdn.discordapp.com/embed/avatars/0.png';
-    };
-
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('appScreen').classList.remove('hidden');
-    toast('Login realizado!', 'success');
-    loadCampaigns();
-    startPolling();
+    // Salvar conta
+    const accounts = getAccounts();
+    accounts[u.id] = { token, username: u.global_name || u.username, id: u.id, avatar: u.avatar, discriminator: u.discriminator };
+    saveAccounts(accounts);
+    setActiveAccountId(u.id);
+    await loginWithToken(token, accounts[u.id]);
   } catch (e) {
     errEl.textContent = 'Erro de conexão: ' + e.message;
   }
+}
+
+async function loginWithToken(token, userData) {
+  currentToken = token;
+  const u = userData;
+  document.getElementById('userName').textContent = u.username;
+  document.getElementById('userId').textContent = '#' + u.id.slice(0, 8);
+
+  let avatarUrl;
+  if (u.avatar) {
+    avatarUrl = `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128`;
+  } else {
+    const idx = u.discriminator && u.discriminator !== '0'
+      ? parseInt(u.discriminator) % 5
+      : Number(BigInt(u.id) >> 22n) % 6;
+    avatarUrl = `https://cdn.discordapp.com/embed/avatars/${idx}.png`;
+  }
+  document.getElementById('userAvatar').src = avatarUrl;
+  document.getElementById('userAvatar').onerror = () => {
+    document.getElementById('userAvatar').src = 'https://cdn.discordapp.com/embed/avatars/0.png';
+  };
+
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appScreen').classList.remove('hidden');
+  renderAccountSelect();
+  toast('Login realizado!', 'success');
+  loadCampaigns();
+  startPolling();
 }
 
 // ===== NAVEGAÇÃO =====
@@ -164,3 +232,12 @@ function startPolling() {
 document.getElementById('tokenInput').addEventListener('keypress', e => {
   if (e.key === 'Enter') validateToken();
 });
+
+// ===== AUTO-LOGIN =====
+(function autoLogin() {
+  const accounts = getAccounts();
+  const activeId = getActiveAccountId();
+  if (activeId && accounts[activeId]) {
+    loginWithToken(accounts[activeId].token, accounts[activeId]);
+  }
+})();
