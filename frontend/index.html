@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SelfBot Painel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .card { background: #16213e; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    input, textarea, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #333; background: #0f3460; color: #fff; font-size: 14px; }
+    button { background: #e94560; cursor: pointer; font-weight: bold; border: none; }
+    button:hover { background: #c73650; }
+    .user-info { display: flex; align-items: center; gap: 12px; }
+    .user-info img { width: 48px; height: 48px; border-radius: 50%; }
+    .hidden { display: none; }
+    #campaigns { margin-top: 16px; }
+    .campaign-item { background: #0f3460; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card" id="loginCard">
+      <h2>🔐 Login</h2>
+      <input type="password" id="tokenInput" placeholder="Cole seu token do Discord">
+      <button onclick="validateToken()">Entrar</button>
+      <p id="loginError" style="color: #e94560; font-size: 13px;"></p>
+    </div>
+
+    <div class="card hidden" id="panelCard">
+      <div class="user-info">
+        <img id="userAvatar" src="" alt="Avatar">
+        <div>
+          <strong id="userName"></strong>
+          <br><small id="userId"></small>
+        </div>
+      </div>
+    </div>
+
+    <div class="card hidden" id="campaignCard">
+      <h3>📢 Nova Campanha</h3>
+      <input type="text" id="channelIds" placeholder="IDs dos canais (separados por vírgula)">
+      <textarea id="message" placeholder="Mensagem a enviar" rows="3"></textarea>
+      <input type="number" id="delayMin" placeholder="Delay mínimo (segundos)" value="8">
+      <input type="number" id="delayMax" placeholder="Delay máximo (segundos)" value="15">
+      <button onclick="createCampaign()">Criar Campanha</button>
+      <div id="campaigns"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentToken = '';
+    const API_URL = window.location.origin + '/api';
+
+    async function validateToken() {
+      const token = document.getElementById('tokenInput').value.trim();
+      if (!token) return;
+      try {
+        const res = await fetch(API_URL + '/validate-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentToken = token;
+          document.getElementById('loginCard').classList.add('hidden');
+          document.getElementById('panelCard').classList.remove('hidden');
+          document.getElementById('campaignCard').classList.remove('hidden');
+          document.getElementById('userName').textContent = data.user.username;
+          document.getElementById('userId').textContent = data.user.id;
+          if (data.user.avatar) {
+            document.getElementById('userAvatar').src = `https://cdn.discordapp.com/avatars/${data.user.id}/${data.user.avatar}.png`;
+          }
+          loadCampaigns();
+        } else {
+          document.getElementById('loginError').textContent = 'Token inválido';
+        }
+      } catch (e) {
+        document.getElementById('loginError').textContent = 'Erro de conexão';
+      }
+    }
+
+    async function createCampaign() {
+      const channelIds = document.getElementById('channelIds').value.split(',').map(s => s.trim()).filter(Boolean);
+      const message = document.getElementById('message').value.trim();
+      const delayMin = parseInt(document.getElementById('delayMin').value) || 8;
+      const delayMax = parseInt(document.getElementById('delayMax').value) || 15;
+      if (!channelIds.length || !message) return alert('Preencha todos os campos');
+
+      const res = await fetch(API_URL + '/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: currentToken, channel_ids: channelIds, message, delay_min: delayMin, delay_max: delayMax })
+      });
+      const data = await res.json();
+      if (data.success) {
+        loadCampaigns();
+        document.getElementById('channelIds').value = '';
+        document.getElementById('message').value = '';
+      }
+    }
+
+    async function loadCampaigns() {
+      const res = await fetch(API_URL + '/campaigns');
+      const campaigns = await res.json();
+      document.getElementById('campaigns').innerHTML = campaigns.map(c => `
+        <div class="campaign-item">
+          <span>${c.message.substring(0, 30)}... (${c.channel_ids.length} canais)</span>
+          <button onclick="startCampaign(${c.id})" style="width: auto; padding: 6px 12px;">▶ Iniciar</button>
+        </div>
+      `).join('');
+    }
+
+    async function startCampaign(id) {
+      await fetch(API_URL + '/campaigns/' + id + '/start', { method: 'POST' });
+      alert('Campanha iniciada! Verifique o terminal.');
+    }
+  </script>
+</body>
+</html>
