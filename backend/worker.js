@@ -44,7 +44,7 @@ async function startWorker(campaignId) {
       addLog('Abrindo navegador Chromium...', 'info');
       browser = await puppeteer.launch({
         headless: 'new',
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+        // Não definir executablePath — a imagem oficial já sabe onde está o Chromium
         userDataDir: path.join('/tmp', `puppeteer-${campaignId}`),
         args: [
           '--disable-blink-features=AutomationControlled',
@@ -55,6 +55,8 @@ async function startWorker(campaignId) {
           '--no-first-run',
           '--no-zygote',
           '--single-process',
+          '--disable-crash-reporter',   // ← remove o erro do crashpad
+          '--disable-breakpad',         // ← remove o erro do crashpad
           '--window-size=1280,720'
         ],
         defaultViewport: { width: 1280, height: 720 }
