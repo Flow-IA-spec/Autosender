@@ -1,12 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
 const db = require('./database');
 const { startWorker } = require('./worker');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 app.post('/api/validate-token', async (req, res) => {
   const { token } = req.body;
