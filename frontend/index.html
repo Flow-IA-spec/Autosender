@@ -32,6 +32,17 @@
       <a class="nav-item" data-tab="create">➕ Nova Campanha</a>
       <a class="nav-item" data-tab="logs">📜 Logs</a>
     </nav>
+
+    <!-- Seletor de contas -->
+    <div class="account-switcher">
+      <label>Conta ativa</label>
+      <select id="accountSelect" onchange="switchAccount()"></select>
+      <div class="account-actions">
+        <button class="btn-mini" onclick="addAccount()">+ Nova</button>
+        <button class="btn-mini btn-danger" onclick="removeAccount()">Remover</button>
+      </div>
+    </div>
+
     <div class="user-box" id="userBox">
       <img id="userAvatar" src="" alt="">
       <div>
