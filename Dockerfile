@@ -1,37 +1,22 @@
-FROM node:20-slim
+# Usa a imagem oficial do Puppeteer (já tem Chromium + dbus configurados)
+FROM ghcr.io/puppeteer/puppeteer:latest
 
-RUN apt-get update && apt-get install -y \
-    chromium \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libx11-xcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxkbcommon0 \
-    libxrandr2 \
-    xdg-utils \
-    --no-install-recommends && rm -rf /var/lib/apt/lists/*
-
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV NODE_ENV=production
+# Muda para root para instalar as dependências do nosso app
+USER root
 
 WORKDIR /app
+
+# Copia e instala dependências do backend
 COPY backend/package*.json ./backend/
 RUN cd backend && npm install --omit=dev
 
+# Copia o código do backend e frontend
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
+
+# Variáveis de ambiente
+ENV NODE_ENV=production
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 EXPOSE 3000
 CMD ["node", "backend/server.js"]
